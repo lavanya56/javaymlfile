@@ -1,0 +1,79 @@
+#Ansible playbook to install Java 8 on Debian
+#
+# Thanks to http://www.sysadminslife.com/linux/howto-oracle-sun-java-8-installation-unter-debian-6-squeeze/
+#
+# Author: Gabriel Birke <gb@birke-software.de>
+
+- hosts: webservers
+  vars:
+    java_download: http://download.oracle.com/otn-pub/java/jdk/8u112-b15/jdk-8u112-linux-x64.tar.gz
+    java_name: "jdk1.8.0_112"
+    download_folder: "/usr/bin"
+    java_archive: "{{download_folder}}/jdk-8u112-linux-x64.tar.gz"
+    java_folder: /usr/lib/jvm
+    java_alias: java-8-oracle
+    java_controller: "/root/balu/ansi_playbooks/jdk-8u112-linux-x64.tar.gz"
+
+  tasks:
+
+  - name: Install tar
+    yum: pkg=tar
+  - name: Install wget
+    yum: pkg=wget
+
+  - name: Install unzip
+    yum: pkg=unzip
+  - file:
+      path: "{{download_folder}}"
+      owner: root
+      mode: 0776
+  - name: Download java
+    get_url: 'url={{java_download}} dest={{download_folder}} headers="Cookie:gpw_e24=http%3A%2F%2Fwww.oracle.com%2F; oraclelicense=accept-securebackup-cookie" checksum=md5:de9b7a90f0f5a13cfcaa3b01451d0337'
+
+  - name: Download and unpack
+    unarchive:
+      src: "{{download_folder}}/jdk-8u112-linux-x64.tar.gz"
+      dest: "{{download_folder}}"
+      copy: no
+      owner: root
+      mode: 0776
+      list_files: true
+      creates: "{{java_name}}"
+
+
+  - name: Fix ownership
+    file: "state=directory path={{download_folder}}/{{java_name}}  owner=root recurse=yes"
+
+  - name: Create Java folder
+    file: "state=directory path={{java_folder}}"
+
+  - name: Move Java to final folder
+    command: "mv {{download_folder}}/{{java_name}} {{java_folder}} creates={{java_folder}}/{{java_name}}"
+
+  - name: Create symlink for easier update
+    file: "state=link src={{java_folder}}/{{java_name}} dest={{java_folder}}/{{java_alias}}"
+  - name: Make Java available for system
+    command: 'update-alternatives --install "/usr/bin/java" "java" "{{java_folder}}/{{java_alias}}/bin/java" 2'
+
+  - name: Make the Javac available for systems
+    command: 'update-alternatives --install "/usr/bin/javac" "javac" "{{java_folder}}/{{java_alias}}/bin/javac" 1'
+
+  - name: Make the jar available for systems
+    command: 'update-alternatives --install "/usr/bin/jar" "jar" "{{java_folder}}/{{java_alias}}/bin/jar" 1'
+
+  - shell: echo JAVA_HOME is $JAVA_HOME
+    environment:
+      JAVA_HOME: $JAVA_HOME:{{download_folder}}/jdk1.8.0_112/bin
+      JRE_HOME: $JRE_HOME:{{download_folder}}/jdk1.8.0_112/jre
+      PATH: $PATH:{{download_folder}}/jdk1.8.0_112/bin
+    register: shellout
+  - debug: var=shellout
+ - name: Echo Java_Home variables
+    action: lineinfile dest=/etc/profile regexp='export JAVA_HOME.*' line='export  JAVA_HOME=$JAVA_HOME:{{download_folder}}/jdk1.8.0_112/bin'
+
+  - name: echo jre_home
+    action: lineinfile dest=/etc/profile regexp='export JRE_HOME.*' line='export JRE_HOME=$JRE_HOME:{{download_folder}}/jdk1.8.0_112/jre/bin/java'
+
+  - name: echo PATH
+    action: lineinfile dest=/etc/profile  regexp='export PATH.*' line='export PATH=$PATH:{{download_folder}}/jdk1.8.0_112/bin'
+
